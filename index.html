@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MPU6050 3D Model Visualizer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1e3c72, #2a5298);
+            color: white;
+            overflow: hidden;
+        }
+
+        .container {
+            display: flex;
+            height: 100vh;
+        }
+
+        .sidebar {
+            width: 300px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 20px;
+            overflow-y: auto;
+            backdrop-filter: blur(10px);
+            border-right: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .main-content {
+            flex: 1;
+            position: relative;
+        }
+
+        #threejs-container {
+            width: 100%;
+            height: 100%;
+            position: relative;
+        }
+
+        .status-bar {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 10px 15px;
+            border-radius: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #ff4444;
+            transition: background 0.3s ease;
+        }
+
+        .status-dot.connected {
+            background: #44ff44;
+            box-shadow: 0 0 10px rgba(68, 255, 68, 0.5);
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 15px;
+            margin-bottom: 15px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .card h3 {
+            margin-bottom: 10px;
+            color: #61dafb;
+        }
+
+        .sensor-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .sensor-value {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 8px;
+            border-radius: 6px;
+            text-align: center;
+        }
+
+        .sensor-label {
+            font-size: 0.8em;
+            color: #ccc;
+        }
+
+        .sensor-number {
+            font-size: 1.2em;
+            font-weight: bold;
+            margin-top: 2px;
+        }
+
+        .controls {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        button {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        button:disabled {
+            background: #666;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .input-group {
+            margin-bottom: 10px;
+        }
+
+        .input-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 14px;
+            color: #ccc;
+        }
+
+        input[type="text"], input[type="file"] {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 6px;
+            background: rgba(0, 0, 0, 0.3);
+            color: white;
+        }
+
+        input[type="file"] {
+            border: 2px dashed rgba(255, 255, 255, 0.3);
+            padding: 15px;
+            text-align: center;
+            cursor: pointer;
+        }
+
+        .loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            z-index: 2000;
+        }
+
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-top: 3px solid #61dafb;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="sidebar">
+            <div class="card">
+                <h3>🔗 Connection</h3>
+                <div class="input-group">
+                    <label for="esp32-ip">ESP32 IP Address:</label>
+                    <input type="text" id="esp32-ip" value="192.168.1.100" placeholder="192.168.1.100">
+                </div>
+                <div class="controls">
+                    <button id="connect-btn">Connect to ESP32</button>
+                    <button id="disconnect-btn" disabled>Disconnect</button>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>📱 Gyroscope Data</h3>
+                <div class="sensor-grid">
+                    <div class="sensor-value">
+                        <div class="sensor-label">Roll (X)</div>
+                        <div class="sensor-number" id="gyro-x">0.00°</div>
+                    </div>
+                    <div class="sensor-value">
+                        <div class="sensor-label">Pitch (Y)</div>
+                        <div class="sensor-number" id="gyro-y">0.00°</div>
+                    </div>
+                    <div class="sensor-value">
+                        <div class="sensor-label">Yaw (Z)</div>
+                        <div class="sensor-number" id="gyro-z">0.00°</div>
+                    </div>
+                    <div class="sensor-value">
+                        <div class="sensor-label">Temperature</div>
+                        <div class="sensor-number" id="temperature">0.00°C</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>🎯 3D Model</h3>
+                <div class="input-group">
+                    <label for="model-file">Upload .glTF/.glb Model:</label>
+                    <input type="file" id="model-file" accept=".gltf,.glb" title="Select your 3D model file">
+                </div>
+                <div class="controls">
+                    <button id="reset-rotation">Reset Rotation</button>
+                    <button id="center-model">Center Model</button>
+                    <button id="toggle-wireframe">Toggle Wireframe</button>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>📊 Statistics</h3>
+                <div class="sensor-grid">
+                    <div class="sensor-value">
+                        <div class="sensor-label">Updates/sec</div>
+                        <div class="sensor-number" id="update-rate">0</div>
+                    </div>
+                    <div class="sensor-value">
+                        <div class="sensor-label">Connected</div>
+                        <div class="sensor-number" id="connection-time">0s</div>
+                    </div>
+                </div>
+            </div>
+            <label for="scale-slider">Model Scale: </label>
+                <input type="range" id="scale-slider" min="0.1" max="10" step="0.001" value="1" />
+            <span id="scale-value">1.0</span>
+
+        </div>
+
+        <div class="main-content">
+            <div class="status-bar">
+                <div class="status-indicator">
+                    <div class="status-dot" id="status-dot"></div>
+                    <span id="connection-status">Disconnected</span>
+                </div>
+                <div id="model-info">No model loaded</div>
+                <div id="fps-counter">FPS: 0</div>
+            </div>
+
+            <div id="threejs-container"></div>
+
+            <div class="loading" id="loading-overlay">
+                <div class="spinner"></div>
+                <div>Loading 3D Model...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main application script as ES module -->
+    <script type="module" src="./script.js"></script>
+
+    <script type="module">
+        // Initialize the application when DOM is ready
+        document.addEventListener('DOMContentLoaded', function() {
+            // Import the main application class
+            import('./script.js').then(({ default: MPU6050App }) => {
+                // Initialize the application
+                window.app = new MPU6050App();
+                console.log('MPU6050 3D Visualizer loaded successfully');
+            }).catch(error => {
+                console.error('Failed to load application:', error);
+            });
+        });
+    </script>
+</body>
+</html>
